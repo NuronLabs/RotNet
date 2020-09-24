@@ -94,3 +94,10 @@ ENV/
 data/street_view
 logs/
 *.hdf5
+
+# Ignore some stuff
+images/
+output/
+.vscode/
+.idea/
+models/

@@ -12,7 +12,7 @@ from utils import RotNetDataGenerator, crop_largest_rectangle, angle_error, rota
 
 
 def process_images(model, input_path, output_path,
-                   batch_size=64, crop=True):
+                   batch_size=64):
     extensions = ['.jpg', '.jpeg', '.bmp', '.png']
 
     output_is_image = False
@@ -39,8 +39,7 @@ def process_images(model, input_path, output_path,
             rotate=False,
             crop_largest_rect=True,
             crop_center=True
-        ),
-        val_samples=len(image_paths)
+        )
     )
 
     predicted_angles = np.argmax(predictions, axis=1)
@@ -53,13 +52,21 @@ def process_images(model, input_path, output_path,
 
     for path, predicted_angle in zip(image_paths, predicted_angles):
         image = cv2.imread(path)
-        rotated_image = rotate(image, -predicted_angle)
-        if crop:
-            size = (image.shape[0], image.shape[1])
-            rotated_image = crop_largest_rectangle(rotated_image, -predicted_angle, *size)
-        if not output_is_image:
-            output_filename = os.path.join(output_path, os.path.basename(path))
-        cv2.imwrite(output_filename, rotated_image)
+        if 45 <= predicted_angle < 315:
+            if 45 <= predicted_angle and predicted_angle < 135:
+                angle = cv2.ROTATE_90_CLOCKWISE
+                outstr = "clockwise"
+            elif 135 <= predicted_angle and predicted_angle < 225:
+                angle = cv2.ROTATE_180
+                outstr = "vertically"
+            elif 225 <= predicted_angle and predicted_angle < 315:
+                angle = cv2.ROTATE_90_COUNTERCLOCKWISE
+                outstr = "anti-clockwise"
+            rotated_image = cv2.rotate(image, angle)
+            print("Rotated {} {}".format(path, outstr))
+            if not output_is_image:
+                output_filename = os.path.join(output_path, os.path.basename(path))
+            cv2.imwrite(output_filename, rotated_image)
 
 
 if __name__ == '__main__':
@@ -67,15 +74,15 @@ if __name__ == '__main__':
     parser.add_argument('model', help='Path to model')
     parser.add_argument('input_path', help='Path to image or directory')
     parser.add_argument('-o', '--output_path', help='Output directory')
-    parser.add_argument('-b', '--batch_size', help='Batch size for running the network')
-    parser.add_argument('-c', '--crop', dest='crop', default=False, action='store_true',
-                        help='Crop out black borders after rotating')
+    parser.add_argument('-b', '--batch_size',
+                        help='Batch size for running the network')
     args = parser.parse_args()
 
     print('Loading model...')
-    model_location = load_model(args.model, custom_objects={'angle_error': angle_error})
+    model_location = load_model(args.model, custom_objects={
+                                'angle_error': angle_error})
     output_path = args.output_path if args.output_path else args.input_path
 
     print('Processsing input image(s)...')
     process_images(model_location, args.input_path, output_path,
-                   args.batch_size, args.crop)
+                   args.batch_size)

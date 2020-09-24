@@ -95,6 +95,9 @@ data/street_view
 logs/
 *.hdf5
 
+# Ignore logs
+*.csv
+
 # Ignore some stuff
 images/
 output/

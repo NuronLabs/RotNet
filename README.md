@@ -9,4 +9,5 @@ You should use `correct_rotation.py` script to correct the orientation of your o
 You should also specify the following command line arguments:
 - `-o, --output` to specify the output image or directory.
 - `-b, --batch_size` to specify the batch size used to run the model.
+- `-l, --log` to specify if you would like the program to log the output to a .csv file so you can retrain the model
 

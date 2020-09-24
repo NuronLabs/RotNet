@@ -9,10 +9,11 @@ from keras.applications.imagenet_utils import preprocess_input
 from keras.models import load_model
 
 from utils import RotNetDataGenerator, crop_largest_rectangle, angle_error, rotate
+import datetime
 
 
 def process_images(model, input_path, output_path,
-                   batch_size=64):
+                   batch_size=64, log=False):
     extensions = ['.jpg', '.jpeg', '.bmp', '.png']
 
     output_is_image = False
@@ -43,6 +44,7 @@ def process_images(model, input_path, output_path,
     )
 
     predicted_angles = np.argmax(predictions, axis=1)
+    rotated_angles = [] # We will be using this to compile what angles we actually rotate by for logging
 
     if output_path == '':
         output_path = '.'
@@ -52,21 +54,45 @@ def process_images(model, input_path, output_path,
 
     for path, predicted_angle in zip(image_paths, predicted_angles):
         image = cv2.imread(path)
+        isLandscape = image.shape[1] >= image.shape[0] # image.shape = [height, width, channels]
         if 45 <= predicted_angle < 315:
-            if 45 <= predicted_angle and predicted_angle < 135:
-                angle = cv2.ROTATE_90_CLOCKWISE
-                outstr = "clockwise"
-            elif 135 <= predicted_angle and predicted_angle < 225:
-                angle = cv2.ROTATE_180
-                outstr = "vertically"
-            elif 225 <= predicted_angle and predicted_angle < 315:
-                angle = cv2.ROTATE_90_COUNTERCLOCKWISE
-                outstr = "anti-clockwise"
-            rotated_image = cv2.rotate(image, angle)
-            print("Rotated {} {}".format(path, outstr))
+            """
+            Angle rotation logic:
+            if 45 < pred_angle < 315:
+                if isLandscape: rotate by +-90
+                else: rotate by 0/180
+            """
+            if 45 <= predicted_angle and predicted_angle < 135 and not isLandscape:
+                angle_cv2 = cv2.ROTATE_90_CLOCKWISE
+                rotated_angle = 90
+            elif 135 <= predicted_angle and predicted_angle < 225 and isLandscape:
+                angle_cv2 = cv2.ROTATE_180
+                rotated_angle = 180
+            elif 225 <= predicted_angle and predicted_angle < 315 and not isLandscape:
+                angle_cv2 = cv2.ROTATE_90_COUNTERCLOCKWISE
+                rotated_angle = 270
+            else:
+                rotated_angles.append(0)
+                continue
+            rotated_image = cv2.rotate(image, angle_cv2)
+            rotated_angles.append(rotated_angle)
+            print("Rotated {} {}°".format(path, rotated_angle))
             if not output_is_image:
                 output_filename = os.path.join(output_path, os.path.basename(path))
             cv2.imwrite(output_filename, rotated_image)
+        else:
+            rotated_angles.append(0)
+    
+    if log:
+        """
+        Create a CSV file and dump the logs in the format
+        "image_filename, rotation_angle"
+        """
+        with open("log-{}.csv".format(datetime.datetime.now().strftime('%Y%m%dT%H%M%S')),'a') as f:
+            f.write("Filename, Angle\n")
+            for path, rotated_angle in zip(image_paths, rotated_angles):
+                f.write("{}, {}\n".format(os.path.basename(path), rotated_angle))
+
 
 
 if __name__ == '__main__':
@@ -76,6 +102,7 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output_path', help='Output directory')
     parser.add_argument('-b', '--batch_size',
                         help='Batch size for running the network')
+    parser.add_argument('-l', '--log', help='Log for future training')
     args = parser.parse_args()
 
     print('Loading model...')
@@ -85,4 +112,4 @@ if __name__ == '__main__':
 
     print('Processsing input image(s)...')
     process_images(model_location, args.input_path, output_path,
-                   args.batch_size)
+                   args.batch_size, args.log)
